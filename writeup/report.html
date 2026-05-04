@@ -1,1 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BlockTrace — Real-Time Shadows & Reflections in Minecraft | CS184 Spring 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;1,400&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 
+:root {
+  --bg:      #0b0d11;
+  --surface: #111318;
+  --card:    #14171f;
+  --border:  #1f2330;
+  --green:   #6ee76e;
+  --blue:    #58b6e8;
+  --gold:    #e8c258;
+  --text:    #dfe2ec;
+  --muted:   #6b7390;
+  --code-bg: #090b0f;
+  --code-fg: #98d498;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+
+/* NAV */
+nav {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(11,13,17,0.94);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 clamp(1.5rem, 6vw, 5rem);
+  display: flex; gap: 2rem; align-items: center; height: 50px;
+  overflow-x: auto;
+}
+nav a {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); text-decoration: none; white-space: nowrap;
+  transition: color .18s;
+}
+nav a:hover { color: var(--green); }
+
+/* HERO */
+.hero {
+  padding: clamp(3rem,8vh,6rem) clamp(1.5rem,6vw,5rem) clamp(2rem,5vh,4rem);
+  border-bottom: 1px solid var(--border);
+  position: relative; overflow: hidden;
+}
+.hero::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 60% at 85% 30%, rgba(110,231,110,.06) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 50% at 5%  80%, rgba(88,182,232,.05) 0%, transparent 65%);
+}
+.hero-eyebrow {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--green); margin-bottom: 1.1rem;
+}
+.hero h1 {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(2rem, 5vw, 3.8rem);
+  line-height: 1.1; font-weight: 400;
+  max-width: 820px; margin-bottom: 1.2rem;
+}
+.hero h1 em { color: var(--green); font-style: normal; }
+.hero-desc { font-size: 15px; color: var(--muted); max-width: 640px; margin-bottom: 1.4rem; }
+.hero-meta { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); }
+.hero-meta span { color: var(--text); }
+.pill-row { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.4rem; }
+.pill {
+  display: inline-flex; align-items: center;
+  padding: 6px 16px; border: 1px solid var(--border); border-radius: 2px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+  color: var(--muted); text-decoration: none;
+  transition: border-color .18s, color .18s;
+}
+.pill:hover, .pill.primary { border-color: var(--green); color: var(--green); }
+
+/* SECTIONS */
+section {
+  padding: 4rem clamp(1.5rem,6vw,5rem);
+  border-bottom: 1px solid var(--border);
+  max-width: 980px;
+}
+
+.eyebrow {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--green); margin-bottom: .8rem;
+}
+
+h2 {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(1.6rem,3vw,2.3rem);
+  font-weight: 400; line-height: 1.15;
+  margin-bottom: 1.5rem;
+}
+
+h3 {
+  font-size: 1.05rem; font-weight: 600;
+  color: var(--blue); margin: 2.5rem 0 .7rem;
+}
+
+p { margin-bottom: 1rem; color: #c5c9d8; }
+
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ABSTRACT */
+.abstract-box {
+  border-left: 3px solid var(--green);
+  padding: 1.4rem 1.6rem;
+  background: var(--card);
+  font-size: 15px; line-height: 1.8; color: var(--text);
+}
+
+/* CODE */
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  padding: 1.1rem 1.4rem;
+  margin: 1.2rem 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px; line-height: 1.75;
+  color: var(--code-fg);
+  overflow-x: auto; border-radius: 2px;
+}
+code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px; color: var(--blue);
+  background: rgba(9,11,15,0.7);
+  padding: 1px 5px; border-radius: 2px;
+}
+pre code { font-size: inherit; background: none; padding: 0; color: inherit; }
+
+/* PIPELINE */
+.pipeline {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  padding: 1.4rem 1.6rem;
+  margin: 1.4rem 0; overflow-x: auto; border-radius: 2px;
+}
+.pipeline pre {
+  background: none; border: none; margin: 0; padding: 0;
+  color: #7ab0d4; font-size: 12px;
+}
+.pipeline pre .hi  { color: var(--green); }
+.pipeline pre .hi2 { color: var(--gold); }
+.pipeline pre .dim { color: var(--muted); }
+
+/* FEATURE GRID */
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px,1fr));
+  gap: 1px; background: var(--border);
+  border: 1px solid var(--border); margin: 1.4rem 0;
+}
+.feat-card { background: var(--card); padding: 1.2rem 1.1rem; }
+.feat-num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; letter-spacing: .12em;
+  color: var(--green); margin-bottom: .4rem;
+}
+.feat-card h4 { font-size: .9rem; font-weight: 600; margin-bottom: .35rem; }
+.feat-card p  { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5; }
+
+/* PROBLEMS TABLE */
+.prob-table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+.prob-table th {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--green); text-align: left;
+  padding: 8px 14px; border-bottom: 1px solid var(--green);
+  background: var(--code-bg);
+}
+.prob-table td {
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  vertical-align: top; font-size: 13.5px; color: #c5c9d8;
+}
+.prob-table td:first-child {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px; color: var(--gold);
+  white-space: nowrap; width: 195px;
+}
+.prob-table tr:last-child td { border-bottom: none; }
+
+/* LESSONS */
+.lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px,1fr));
+  gap: 1rem; margin: 1rem 0;
+}
+.lesson-card { border: 1px solid var(--border); padding: 1rem; border-radius: 2px; }
+.lesson-card h4 { font-size: .88rem; color: var(--blue); margin-bottom: .35rem; font-weight: 600; }
+.lesson-card p  { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5; }
+
+/* RESULTS */
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px,1fr));
+  gap: 1rem; margin: 1.2rem 0;
+}
+.result-item {
+  background: var(--card);
+  border: 1px dashed var(--border);
+  padding: 2.2rem 1rem;
+  text-align: center; border-radius: 2px;
+}
+.result-item img {
+  width: 100%; height: auto; display: block;
+  border: 1px solid var(--border); border-radius: 2px; margin-bottom: .6rem;
+}
+.result-caption {
+  font-size: 12.5px; color: var(--muted);
+  font-style: italic; line-height: 1.5; margin-top: .5rem;
+}
+.result-ph {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px; color: #2a2e3a;
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: .5rem;
+}
+
+/* VIDEO */
+.video-box {
+  margin: 1.2rem 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 3rem 1rem;
+  text-align: center; border-radius: 2px;
+}
+.video-box p {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px; color: var(--muted); margin: 0;
+}
+
+/* REFS */
+.ref-list { list-style: none; padding: 0; }
+.ref-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px; color: #c5c9d8; line-height: 1.6;
+}
+.ref-list li:last-child { border-bottom: none; }
+
+/* CONTRIBUTIONS */
+.contrib-table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+.contrib-table th {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--green); text-align: left;
+  padding: 9px 16px; border-bottom: 1px solid var(--green);
+  background: var(--code-bg);
+}
+.contrib-table td {
+  padding: 13px 16px; border-bottom: 1px solid var(--border);
+  vertical-align: top; font-size: 13.5px; color: #c5c9d8;
+}
+.contrib-table td:first-child {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px; color: var(--text);
+  white-space: nowrap; width: 175px;
+}
+.contrib-table tr:last-child td { border-bottom: none; }
+
+/* FOOTER */
+footer {
+  padding: 2rem clamp(1.5rem,6vw,5rem);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 1rem;
+}
+footer p {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px; color: var(--muted); margin: 0;
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#abstract">Abstract</a>
+  <a href="#approach">Approach</a>
+  <a href="#problems">Problems</a>
+  <a href="#results">Results</a>
+  <a href="#video">Video</a>
+  <a href="#references">References</a>
+  <a href="#contributions">Team</a>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-eyebrow">CS184 · Spring 2026 · Final Project</div>
+  <h1><em>BlockTrace</em> — Real-Time Shadows &amp; Reflections in Minecraft</h1>
+  <p class="hero-desc">
+    A custom Iris/Optifine shader pack built from scratch: deferred shadow mapping,
+    screen-space reflections, and animated water — running live in Minecraft Java Edition.
+  </p>
+  <p class="hero-meta">
+    <span>Vedant Jhawar</span> &nbsp;·&nbsp;
+    <span>Jeremy Villanueva</span> &nbsp;·&nbsp;
+    <span>Yash Shah</span>
+  </p>
+  <div class="pill-row">
+    <a class="pill primary" href="https://github.com/vejhawar0/cs184-project" target="_blank">GitHub Repo</a>
+    <a class="pill" href="#video">Showcase Video</a>
+    <a class="pill" href="#results">Results</a>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════
+     ABSTRACT
+════════════════════════════════════════ -->
+<section id="abstract">
+  <div class="eyebrow">00 — Abstract</div>
+  <h2>Abstract</h2>
+  <div class="abstract-box">
+    We built a custom Minecraft Java Edition shader pack using the Iris/Optifine shader API,
+    transforming a vanilla, flat-lit scene into one with directional sun shadows,
+    screen-space reflections on reflective materials (glass, ice, metal and gem blocks, and water),
+    and animated water whose surface normals are driven by a procedural sum-of-sines height field.
+    Our goal was to apply core real-time graphics concepts from CS184 — deferred rendering,
+    shadow mapping, screen-space ray marching, and the relationship between height fields and
+    surface normals — to a context that millions of people engage with daily.
+    Starting from near-empty stub shaders (gbuffer passes that output <code>albedo × lightmap</code>,
+    a shadow pass that writes constant white, and a composite pass that does nothing),
+    we built every shading effect ourselves across eight GLSL shader files.
+    The result runs at interactive frame rates on consumer GPU hardware inside Minecraft Java Edition.
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     TECHNICAL APPROACH
+════════════════════════════════════════ -->
+<section id="approach">
+  <div class="eyebrow">01 — Technical Approach</div>
+  <h2>Technical Approach</h2>
+
+  <p>
+    Iris/Optifine enforces a deferred rendering pipeline structure — fixed stage names,
+    fixed texture slots, fixed uniform names — but every line of shading logic inside each
+    stage is authored entirely by us. The pipeline as we built it looks like this:
+  </p>
+
+  <div class="pipeline">
+<pre>
+<span class="hi">gbuffers_terrain.vsh/fsh</span>  ─┐
+                            ├──▶  colortex0   <span class="dim">// albedo × lightmap  (lit scene color)</span>
+<span class="hi">gbuffers_water.vsh/fsh</span>    ─┤
+                            └──▶  colortex1   <span class="dim">// view-space normal (rgb) + reflectivity (a)  ← added by us</span>
+                                      │
+                                      ▼
+                            <span class="hi">composite.vsh/fsh</span>  ──▶  <span class="hi">final.vsh/fsh</span>  ──▶  screen
+                                      ▲
+              <span class="hi2">shadow.vsh/fsh</span>  ──▶  shadowtex0   <span class="dim">// 1024×1024 depth from the sun's POV</span>
+</pre>
+  </div>
+
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="feat-num">Feature 01</div>
+      <h4>Directional Shadow Mapping</h4>
+      <p>Sun shadows via a 1024×1024 orthographic shadow map reprojected through the depth buffer. Occluded pixels darkened 60%.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-num">Feature 02</div>
+      <h4>Material Tagging</h4>
+      <p>Per-block reflectivity assigned at the vertex stage using Iris's <code>block.properties</code> + <code>mc_Entity.x</code>.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-num">Feature 03</div>
+      <h4>Screen-Space Reflections</h4>
+      <p>32-step view-space ray march with Schlick Fresnel modulation. Runs only on pixels marked reflective.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-num">Feature 04</div>
+      <h4>Animated Water</h4>
+      <p>Two-wave sum-of-sines height field, gradient-derived normals via finite differences, anchored in world space.</p>
+    </div>
+  </div>
+
+  <!-- ─── SHADOW MAPPING ─── -->
+  <h3>1 · Directional Sun Shadows</h3>
+
+  <p>
+    The shadow pass is configured in <code>shaders.properties</code>:
+  </p>
+  <pre>shadow.enabled=true
+shadow.resolution=1024
+shadow.buffers=shadowtex0</pre>
+
+  <p>
+    <code>shadow.vsh</code> transforms geometry using <code>ftransform()</code>, which applies
+    <code>shadowProjection × shadowModelView</code> — an orthographic projection from the sun's
+    point of view provided by Iris. <code>shadow.fsh</code> simply outputs
+    <code>gl_FragColor = vec4(1.0)</code>, which lets the driver write depth into
+    <code>shadowtex0</code>. These two files together produce a 1024×1024 depth texture
+    encoding the sun's view of the scene.
+  </p>
+
+  <p>
+    In <code>composite.fsh</code>, every on-screen pixel (excluding sky pixels where
+    <code>depth == 1.0</code>) is processed as follows. We first reconstruct its
+    view-space position from the depth buffer using the inverse projection matrix:
+  </p>
+  <pre>// composite.fsh — position reconstruction (also reused for SSR)
+vec3 viewPosFromDepth(vec2 uv, float depth) {
+    vec4 ndcPos  = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+    vec4 viewPos = gbufferProjectionInverse * ndcPos;
+    return viewPos.xyz / viewPos.w;
+}
+
+vec3 viewPos  = viewPosFromDepth(texcoord, depth);
+vec4 worldPos = gbufferModelViewInverse * vec4(viewPos, 1.0);</pre>
+
+  <p>
+    We then transform <code>worldPos</code> into the sun's clip space, convert to NDC,
+    remap to [0,1] UV, and compare the stored shadow depth against the pixel's depth from
+    the sun. A constant bias of <code>0.005</code> in NDC depth units prevents shadow acne —
+    the artefact that appears when a flat surface compares against a quantized version of
+    its own depth. Occluded pixels receive a 60% darkening:
+  </p>
+  <pre>// composite.fsh — shadow comparison
+vec4 shadowClipPos = shadowProjection * (shadowModelView * worldPos);
+vec3 shadowNDC     = shadowClipPos.xyz / shadowClipPos.w;
+vec3 shadowUV      = shadowNDC * 0.5 + 0.5;
+
+float bias        = 0.005;
+float shadowDepth = texture2D(shadow, shadowUV.xy).r;
+float inShadow    = (shadowUV.z - bias > shadowDepth) ? 1.0 : 0.0;
+float shadowFactor = 1.0 - (inShadow * 0.6);
+vec3  shadedColor  = color.rgb * shadowFactor;</pre>
+
+  <!-- ─── MATERIAL TAGGING ─── -->
+  <h3>2 · Material Tagging via block.properties and mc_Entity</h3>
+
+  <p>
+    Vanilla Minecraft's geometry stream carries no material identity — every vertex looks
+    the same to the shader regardless of block type. Iris solves this with
+    <code>block.properties</code>, a pack-level file that maps block name strings to
+    integer IDs which Iris then exposes per-vertex as <code>mc_Entity.x</code>.
+    Our <code>block.properties</code> declares three material classes:
+  </p>
+  <pre># block.properties
+# ID 100 — smooth, semi-mirror surfaces
+block.100 = minecraft:glass  minecraft:glass_pane
+            minecraft:white_stained_glass  minecraft:orange_stained_glass
+            ... (all 16 stained glass colours) ...
+            minecraft:ice  minecraft:packed_ice  minecraft:blue_ice  minecraft:frosted_ice
+
+# ID 101 — polished metal / gem blocks
+block.101 = minecraft:iron_block  minecraft:gold_block  minecraft:diamond_block
+            minecraft:emerald_block  minecraft:netherite_block
+
+# ID 102 — water (gated separately so wave normals don't apply to stained glass)
+block.102 = minecraft:water  minecraft:flowing_water</pre>
+
+  <p>
+    In <code>gbuffers_terrain.vsh</code>, the ID is read at the vertex stage and used to
+    assign a <code>reflectivity</code> varying, forwarded to the fragment shader and ultimately
+    packed into <code>colortex1.a</code>:
+  </p>
+  <pre>// gbuffers_terrain.vsh
+attribute vec4 mc_Entity;   // mc_Entity.x = integer block ID from block.properties
+varying float reflectivity;
+
+int id = int(mc_Entity.x + 0.5);
+if      (id == 100) { reflectivity = 0.7; }  // glass / ice — strong, near-mirror
+else if (id == 101) { reflectivity = 0.5; }  // metal & gem blocks — moderate
+else                { reflectivity = 0.0; }  // everything else: matte</pre>
+
+  <p>
+    Water is handled in <code>gbuffers_water.vsh</code>, which always sets
+    <code>reflectivity = 0.6</code> for all fragments in that stage (water uses a
+    dedicated wave-normal path and a fixed reflectivity value).
+  </p>
+
+  <!-- ─── G-BUFFER ─── -->
+  <h3>3 · Augmented G-Buffer (colortex1)</h3>
+
+  <p>
+    Both <code>gbuffers_terrain.fsh</code> and <code>gbuffers_water.fsh</code> declare
+    <code>/* DRAWBUFFERS:01 */</code>, activating a second render target.
+    <code>colortex0</code> holds the lit scene color; <code>colortex1</code> packs
+    the view-space normal and per-pixel reflectivity:
+  </p>
+  <pre>// gbuffers_terrain.fsh  (and gbuffers_water.fsh — same pattern)
+/* DRAWBUFFERS:01 */
+void main() {
+    vec4 albedo = texture2D(gtexture, texcoord) * color;
+    vec3 light  = texture2D(lightmap, lmcoord).rgb;
+
+    gl_FragData[0] = vec4(albedo.rgb * light, albedo.a);          // colortex0
+    gl_FragData[1] = vec4(viewNormal * 0.5 + 0.5, reflectivity);  // colortex1
+}</pre>
+
+  <p>
+    The view-space normal <code>viewNormal</code> is computed in each vertex shader as
+    <code>normalize(gl_NormalMatrix * gl_Normal)</code>. <code>gl_NormalMatrix</code> is the
+    inverse-transpose of the upper 3×3 of the modelview matrix — the correct transform for
+    direction vectors under arbitrary linear deformations. The <code>* 0.5 + 0.5</code>
+    remap stores the signed normal in the [0,1] range of the RGBA8 backing texture;
+    the inverse remap (<code>* 2.0 − 1.0</code>) is applied when reading in
+    <code>composite.fsh</code>.
+  </p>
+
+  <!-- ─── SSR ─── -->
+  <h3>4 · Screen-Space Reflections (SSR)</h3>
+
+  <p>
+    In <code>composite.fsh</code>, after computing the shadow-modulated scene color, we read
+    <code>colortex1</code> and, for every pixel with <code>reflectivity &gt; 0.01</code>,
+    run a 32-step view-space ray march:
+  </p>
+  <pre>// composite.fsh — SSR
+vec4  normalRefl  = texture2D(colortex1, texcoord);
+float reflectivity = normalRefl.a;
+vec3  finalColor  = shadedColor;
+
+if (reflectivity > 0.01) {
+    vec3 normal     = normalize(normalRefl.rgb * 2.0 - 1.0);
+    vec3 viewDir    = normalize(viewPos);        // camera → surface
+    vec3 reflectDir = reflect(viewDir, normal);  // R = V − 2(V·N)N
+
+    // Offset start to avoid self-intersection on step 1
+    vec3 rayPos  = viewPos + normal * 0.05;
+    vec3 rayStep = reflectDir * 0.3;             // 0.3 view-space units per step
+    vec3 reflColor = vec3(0.0);
+    float hit = 0.0;
+
+    for (int i = 0; i < 32; i++) {
+        rayPos += rayStep;
+
+        vec4 clip = gbufferProjection * vec4(rayPos, 1.0);
+        vec2 uv   = (clip.xy / clip.w) * 0.5 + 0.5;
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) break;
+
+        float sampledDepth = texture2D(depthtex0, uv).r;
+        vec3  sceneViewPos = viewPosFromDepth(uv, sampledDepth);
+
+        // View space goes down −Z: "ray behind geometry" = rayPos.z < scene.z
+        float diff = rayPos.z - sceneViewPos.z;
+        if (diff < 0.0 && diff > -0.6) {
+            reflColor = texture2D(gcolor, uv).rgb;
+            hit = 1.0; break;
+        }
+    }
+
+    // Schlick-style Fresnel: F = (1 − cosθ)^5
+    float cosTheta    = max(dot(-viewDir, normal), 0.0);
+    float fresnel     = pow(1.0 - cosTheta, 5.0);
+    // Base reflectivity 40% at normal incidence, full reflectivity at grazing angles
+    float reflStrength = mix(reflectivity * 0.4, reflectivity, fresnel);
+
+    finalColor = mix(shadedColor, reflColor, reflStrength * hit);
+}</pre>
+
+  <p>
+    The Schlick approximation (Schlick 1994) ensures reflections strengthen at grazing angles,
+    matching real dielectric and metallic surface behaviour. SSR's fundamental trade-off —
+    it can only reflect geometry already on screen — is accepted; a sky or cubemap fallback
+    would be the natural extension.
+  </p>
+
+  <!-- ─── WATER ─── -->
+  <h3>5 · Animated Water with Procedural Wave Normals</h3>
+
+  <p>
+    Water with a flat normal produces a static, mirror-like reflection.
+    To create natural rippling, we model the water surface as a height field
+    <em>h(x, z, t)</em> defined by two traveling sine waves, then derive a time-varying
+    surface normal from its spatial gradient. Both functions live in
+    <code>gbuffers_water.fsh</code>:
+  </p>
+  <pre>// gbuffers_water.fsh — wave model
+uniform float frameTimeCounter;  // seconds since shader load, provided by Iris
+
+float wave(vec2 p, vec2 dir, float wavelength, float speed, float amp, float t) {
+    float k = 6.2831853 / wavelength;        // k = 2π / λ
+    return amp * sin(dot(p, dir) * k + speed * t);
+}
+
+float heightField(vec2 p, float t) {
+    return wave(p, normalize(vec2( 1.0,  0.6)), 4.0, 1.5, 0.04,  t)  // wave 1
+         + wave(p, normalize(vec2(-0.7,  1.0)), 2.5, 2.1, 0.025, t); // wave 2
+}</pre>
+
+  <p>
+    The surface normal is derived from the gradient of <em>h</em> using forward finite
+    differences with <em>ε = 0.05</em>. The unit normal of the surface <em>y = h(x,z)</em>
+    is <em>n = normalize(−∂h/∂x, 1, −∂h/∂z)</em> — derived from the cross product of the
+    two natural surface tangents:
+  </p>
+  <pre>// gbuffers_water.fsh — normal from height field (water fragments only)
+if (isWater > 0.5) {
+    vec2  p   = worldPos.xz;       // true world XZ — not camera-relative
+    float t   = frameTimeCounter;
+    float eps = 0.05;
+
+    float hC = heightField(p,                  t);
+    float hX = heightField(p + vec2(eps, 0.0), t);
+    float hZ = heightField(p + vec2(0.0, eps), t);
+
+    vec3 worldNormal = normalize(vec3(-(hX - hC) / eps, 1.0, -(hZ - hC) / eps));
+
+    // Rotate world-space normal into view space for colortex1
+    // w=0 so the translation component of gbufferModelView drops out
+    outNormalView = normalize((gbufferModelView * vec4(worldNormal, 0.0)).xyz);
+}</pre>
+
+  <p>
+    The <code>worldPos</code> variable is reconstructed in <code>gbuffers_water.vsh</code> by
+    undoing the view transform and adding the camera world offset (a uniform provided by Iris):
+  </p>
+  <pre>// gbuffers_water.vsh — world position
+uniform mat4 gbufferModelViewInverse;
+uniform vec3 cameraPosition;
+varying vec3 worldPos;
+varying float isWater;
+
+vec4 viewVertex = gl_ModelViewMatrix * gl_Vertex;
+gl_Position     = gl_ProjectionMatrix * viewVertex;
+
+worldPos = (gbufferModelViewInverse * viewVertex).xyz + cameraPosition;
+
+// Gate wave normals: all translucents share this stage — only water gets waves
+isWater = (int(mc_Entity.x + 0.5) == 102) ? 1.0 : 0.0;
+reflectivity = 0.6;</pre>
+
+  <p>
+    Without adding <code>cameraPosition</code>, the wave field would be evaluated in
+    camera-relative coordinates and ripples would visibly scroll as the player moves.
+    The <code>isWater</code> flag is essential because Iris routes all translucent geometry
+    — including stained glass blocks, which share this shader stage — through
+    <code>gbuffers_water</code>. Without the gate, all stained glass blocks would
+    appear to ripple like water.
+  </p>
+
+  <p>
+    The <code>final.vsh/fsh</code> stage simply blits <code>gcolor</code>
+    (the output of composite) to screen — no additional processing needed:
+  </p>
+  <pre>// final.fsh
+void main() {
+    gl_FragColor = texture2D(gcolor, texcoord);
+}</pre>
+
+</section>
+
+<!-- ════════════════════════════════════════
+     PROBLEMS & LESSONS
+════════════════════════════════════════ -->
+<section id="problems">
+  <div class="eyebrow">02 — Problems &amp; Lessons</div>
+  <h2>Problems Encountered</h2>
+
+  <table class="prob-table">
+    <thead>
+      <tr><th>Problem</th><th>How We Solved It</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Distinguishing block materials</td>
+        <td>
+          Vanilla Minecraft's geometry stream carries no material identity —
+          every vertex is indistinguishable to the shader. We discovered Iris's
+          <code>block.properties</code> + <code>mc_Entity.x</code> mechanism, which lets us
+          declare integer material class IDs at the pack level and read them in
+          <code>gbuffers_terrain.vsh</code> and <code>gbuffers_water.vsh</code>.
+        </td>
+      </tr>
+      <tr>
+        <td>View-space Z sign (SSR)</td>
+        <td>
+          OpenGL view space looks down −Z, so "the ray passed behind visible geometry"
+          means <code>rayPos.z &lt; sceneViewPos.z</code>, not the reverse.
+          Our first SSR implementation had this backwards, producing reflections that
+          faced the wrong direction entirely. We traced through the math on paper and
+          corrected the comparison to <code>diff = rayPos.z − sceneViewPos.z; if (diff &lt; 0.0 &amp;&amp; diff &gt; −0.6)</code>.
+        </td>
+      </tr>
+      <tr>
+        <td>SSR self-intersection noise</td>
+        <td>
+          The initial ray march started at exactly <code>viewPos</code>.
+          Step 1 immediately detected the surface it was launched from, producing a mottled
+          noisy self-reflection across the entire reflective surface.
+          Offsetting the ray origin by <code>normal * 0.05</code> before the loop
+          resolved this completely.
+        </td>
+      </tr>
+      <tr>
+        <td>Stained glass rippling like water</td>
+        <td>
+          Iris routes all translucent geometry through <code>gbuffers_water.vsh/fsh</code>,
+          not just water. Our first wave-normal implementation applied the perturbation to
+          all fragments in that stage — causing stained glass blocks to visibly ripple.
+          We added the <code>isWater</code> varying (set to 1.0 only when
+          <code>mc_Entity.x == 102</code> in the vertex shader) and gated the wave
+          computation on that flag in the fragment shader.
+        </td>
+      </tr>
+      <tr>
+        <td>Wave ripples sliding with the camera</td>
+        <td>
+          Iris stores vertex positions in camera-relative coordinates for floating-point
+          precision. Evaluating the wave field in those coordinates caused ripples to scroll
+          across the water surface as the player moved. Adding <code>cameraPosition</code>
+          (a uniform provided by Iris) to the view-inverse position produced the absolute
+          world coordinates needed for a world-anchored wave field.
+        </td>
+      </tr>
+      <tr>
+        <td>Shadow acne on flat surfaces</td>
+        <td>
+          Without a depth bias, flat surfaces compared their reprojected depth against a
+          discretized shadow map value from the same surface, producing alternating lit and
+          shadowed bands. A constant bias of <code>0.005</code> in NDC depth units was
+          sufficient to push comparisons past the quantization threshold on all tested surfaces.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="color:var(--green);">Lessons Learned</h3>
+  <div class="lesson-grid">
+    <div class="lesson-card">
+      <h4>Deferred shading is a general scaffolding</h4>
+      <p>The geometry-pass → screen-space-pass pattern hosts shadows, SSR, and water normals from the same G-buffer. SSAO, bloom, and volumetrics would all fit in the same framework.</p>
+    </div>
+    <div class="lesson-card">
+      <h4>Screen-space techniques are a pragmatic trade-off</h4>
+      <p>SSR is fast and convincing on-screen but cannot reflect off-camera geometry. Knowing and accepting that limit — rather than chasing a perfect solution — is part of real-time graphics.</p>
+    </div>
+    <div class="lesson-card">
+      <h4>Height fields → normals via the gradient</h4>
+      <p>The derivation <em>n = normalize(−∂h/∂x, 1, −∂h/∂z)</em> comes from the cross product of surface tangents. Working through it from first principles made the math genuinely ours.</p>
+    </div>
+    <div class="lesson-card">
+      <h4>Coordinate frame discipline is everything</h4>
+      <p>Most debugging was not algorithmic — it was tracking which frame (object, world, view, clip, NDC) each vector lived in at each pipeline stage, and ensuring every matrix transform matched.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     RESULTS
+════════════════════════════════════════ -->
+<section id="results">
+  <div class="eyebrow">03 — Results</div>
+  <h2>Results</h2>
+
+  <p>
+    The following captures are from our shader running live in Minecraft Java Edition
+    with the BlockTrace pack loaded via Iris.
+  </p>
+
+  <div class="result-grid">
+    <div class="result-item">
+      <!-- Add your screenshot: <img src="images/comparison.png" alt="Before vs after" /> -->
+      <p class="result-ph">[ Insert comparison screenshot ]</p>
+      <p class="result-caption"><em>Figure 1.</em> Vanilla Minecraft (left) vs. BlockTrace (right). Note cast shadows under foliage and reflections on the iron block.</p>
+    </div>
+    <div class="result-item">
+      <!-- <img src="images/shadows.png" alt="Sun shadows" /> -->
+      <p class="result-ph">[ Insert shadows screenshot ]</p>
+      <p class="result-caption"><em>Figure 2.</em> Directional sun shadows. Each pixel's world position is reprojected into the sun's 1024×1024 orthographic shadow map and depth-compared with a 0.005 bias.</p>
+    </div>
+    <div class="result-item">
+      <!-- <img src="images/ssr_blocks.png" alt="SSR on shiny blocks" /> -->
+      <p class="result-ph">[ Insert SSR blocks screenshot ]</p>
+      <p class="result-caption"><em>Figure 3.</em> SSR on glass and ice (ID 100, reflectivity 0.7) and iron, gold, diamond, emerald, netherite blocks (ID 101, reflectivity 0.5). Schlick Fresnel increases reflection strength at grazing angles.</p>
+    </div>
+    <div class="result-item">
+      <!-- <img src="images/water.gif" alt="Animated water" /> -->
+      <p class="result-ph">[ Insert water GIF / clip ]</p>
+      <p class="result-caption"><em>Figure 4.</em> Animated water. Wave normals derived from a two-sine height field (wavelengths 4.0 and 2.5, evaluated in world space). Reflected scene ripples in real time.</p>
+    </div>
+  </div>
+
+  <p style="font-size:13.5px; color:var(--muted); margin-top:1rem;">
+    To add real screenshots: place image files in an <code>images/</code> folder next to this HTML file,
+    uncomment the <code>&lt;img&gt;</code> tags above, and remove the placeholder <code>&lt;p&gt;</code> tags.
+  </p>
+</section>
+
+<!-- ════════════════════════════════════════
+     VIDEO
+════════════════════════════════════════ -->
+<section id="video">
+  <div class="eyebrow">04 — Showcase Video</div>
+  <h2>Showcase Video</h2>
+  <p>
+    A 1–2 minute video demonstrating shadow mapping, screen-space reflections, and
+    animated water running live in-game. All three team members appear in the video.
+  </p>
+  <div class="video-box">
+    <!--
+      To embed: replace YOUR_VIDEO_ID below with the actual YouTube video ID, then
+      uncomment the iframe and remove the placeholder paragraph.
+    <iframe width="100%" height="420"
+      src="https://www.youtube.com/embed/YOUR_VIDEO_ID"
+      title="BlockTrace CS184 Showcase Video" frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen style="border-radius:2px; display:block;">
+    </iframe>
+    -->
+    <p>[ Paste YouTube / Google Drive link here after filming — or embed above ]</p>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     REFERENCES
+════════════════════════════════════════ -->
+<section id="references">
+  <div class="eyebrow">05 — References</div>
+  <h2>References</h2>
+  <ul class="ref-list">
+    <li>
+      <strong>Iris Shaders / Optifine Shader Pack Format.</strong>
+      Iris shader documentation and the <code>shaders.properties</code> reference covering
+      pipeline stages, uniform names, and texture slot assignments.
+      <a href="https://shaders.properties/current/" target="_blank">shaders.properties/current/</a>
+    </li>
+    <li>
+      <strong>Williams, L. (1978).</strong>
+      <em>Casting Curved Shadows on Curved Surfaces.</em> SIGGRAPH '78.
+      The paper that introduced shadow mapping as a depth-comparison technique.
+      Our shadow pass (orthographic render from sun POV, depth compare with bias) directly implements this approach.
+    </li>
+    <li>
+      <strong>Schlick, C. (1994).</strong>
+      <em>An Inexpensive BRDF Model for Physically-based Rendering.</em>
+      Computer Graphics Forum, 13(3), pp. 233–246.
+      Source of the Fresnel approximation <em>F = (1 − cos θ)⁵</em> used in our SSR reflectivity blend.
+    </li>
+    <li>
+      <strong>de Vries, J.</strong> <em>LearnOpenGL — Screen Space Reflection.</em>
+      <a href="https://learnopengl.com" target="_blank">learnopengl.com</a>.
+      Reference for the ray-march loop structure, on-screen bounds check, and depth comparison logic in <code>composite.fsh</code>.
+    </li>
+    <li>
+      <strong>Tessendorf, J. (2001).</strong>
+      <em>Simulating Ocean Water.</em> SIGGRAPH 2001 Course Notes.
+      Background reading on sum-of-sines and Gerstner wave height-field models;
+      inspired our two-wave <code>heightField()</code> design in <code>gbuffers_water.fsh</code>.
+    </li>
+    <li>
+      <strong>Akenine-Möller, T., Haines, E., Hoffman, N.</strong>
+      <em>Real-Time Rendering, 4th ed.</em> A K Peters / CRC Press, 2018.
+      Reference for deferred shading pipeline structure, shadow map depth bias, and screen-space techniques.
+    </li>
+  </ul>
+</section>
+
+<!-- ════════════════════════════════════════
+     CONTRIBUTIONS
+════════════════════════════════════════ -->
+<section id="contributions">
+  <div class="eyebrow">06 — Team Contributions</div>
+  <h2>Contributions</h2>
+  <table class="contrib-table">
+    <thead>
+      <tr><th>Member</th><th>Contributions</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Vedant Jhawar</td>
+        <td style="color:var(--muted); font-style:italic;">[ To be filled in ]</td>
+      </tr>
+      <tr>
+        <td>Jeremy Villanueva</td>
+        <td style="color:var(--muted); font-style:italic;">[ To be filled in ]</td>
+      </tr>
+      <tr>
+        <td>Yash Shah</td>
+        <td style="color:var(--muted); font-style:italic;">[ To be filled in ]</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<footer>
+  <p>BlockTrace &nbsp;·&nbsp; CS184 Spring 2026 &nbsp;·&nbsp; Vedant Jhawar, Jeremy Villanueva, Yash Shah</p>
+  <p><a href="https://github.com/vejhawar0/cs184-project">github.com/vejhawar0/cs184-project</a></p>
+</footer>
+
+</body>
+</html>
