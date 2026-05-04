@@ -310,7 +310,7 @@ footer p {
   <h1><em>BlockTrace</em> — Real-Time Shadows &amp; Reflections in Minecraft</h1>
   <p class="hero-desc">
     A custom Iris/Optifine shader pack built from scratch: deferred shadow mapping,
-    screen-space reflections, and animated water — running live in Minecraft Java Edition.
+    screen-space reflections, and water reflections — running live in Minecraft Java Edition.
   </p>
   <p class="hero-meta">
     <span>Vedant Jhawar</span> &nbsp;·&nbsp;
@@ -391,7 +391,7 @@ footer p {
     <div class="feat-card">
       <div class="feat-num">Feature 04</div>
       <h4>Animated Water</h4>
-      <p>Two-wave sum-of-sines height field, gradient-derived normals via finite differences, anchored in world space.</p>
+      <p>Water reflections with SSR active. Wave normals via a sum-of-sines height field evaluated in world space.</p>
     </div>
   </div>
 
@@ -578,80 +578,6 @@ if (reflectivity > 0.01) {
     would be the natural extension.
   </p>
 
-  <!-- ─── WATER ─── -->
-  <h3>5 · Animated Water with Procedural Wave Normals</h3>
-
-  <p>
-    Water with a flat normal produces a static, mirror-like reflection.
-    To create natural rippling, we model the water surface as a height field
-    <em>h(x, z, t)</em> defined by two traveling sine waves, then derive a time-varying
-    surface normal from its spatial gradient. Both functions live in
-    <code>gbuffers_water.fsh</code>:
-  </p>
-  <pre>// gbuffers_water.fsh — wave model
-uniform float frameTimeCounter;  // seconds since shader load, provided by Iris
-
-float wave(vec2 p, vec2 dir, float wavelength, float speed, float amp, float t) {
-    float k = 6.2831853 / wavelength;        // k = 2π / λ
-    return amp * sin(dot(p, dir) * k + speed * t);
-}
-
-float heightField(vec2 p, float t) {
-    return wave(p, normalize(vec2( 1.0,  0.6)), 4.0, 1.5, 0.04,  t)  // wave 1
-         + wave(p, normalize(vec2(-0.7,  1.0)), 2.5, 2.1, 0.025, t); // wave 2
-}</pre>
-
-  <p>
-    The surface normal is derived from the gradient of <em>h</em> using forward finite
-    differences with <em>ε = 0.05</em>. The unit normal of the surface <em>y = h(x,z)</em>
-    is <em>n = normalize(−∂h/∂x, 1, −∂h/∂z)</em> — derived from the cross product of the
-    two natural surface tangents:
-  </p>
-  <pre>// gbuffers_water.fsh — normal from height field (water fragments only)
-if (isWater > 0.5) {
-    vec2  p   = worldPos.xz;       // true world XZ — not camera-relative
-    float t   = frameTimeCounter;
-    float eps = 0.05;
-
-    float hC = heightField(p,                  t);
-    float hX = heightField(p + vec2(eps, 0.0), t);
-    float hZ = heightField(p + vec2(0.0, eps), t);
-
-    vec3 worldNormal = normalize(vec3(-(hX - hC) / eps, 1.0, -(hZ - hC) / eps));
-
-    // Rotate world-space normal into view space for colortex1
-    // w=0 so the translation component of gbufferModelView drops out
-    outNormalView = normalize((gbufferModelView * vec4(worldNormal, 0.0)).xyz);
-}</pre>
-
-  <p>
-    The <code>worldPos</code> variable is reconstructed in <code>gbuffers_water.vsh</code> by
-    undoing the view transform and adding the camera world offset (a uniform provided by Iris):
-  </p>
-  <pre>// gbuffers_water.vsh — world position
-uniform mat4 gbufferModelViewInverse;
-uniform vec3 cameraPosition;
-varying vec3 worldPos;
-varying float isWater;
-
-vec4 viewVertex = gl_ModelViewMatrix * gl_Vertex;
-gl_Position     = gl_ProjectionMatrix * viewVertex;
-
-worldPos = (gbufferModelViewInverse * viewVertex).xyz + cameraPosition;
-
-// Gate wave normals: all translucents share this stage — only water gets waves
-isWater = (int(mc_Entity.x + 0.5) == 102) ? 1.0 : 0.0;
-reflectivity = 0.6;</pre>
-
-  <p>
-    Without adding <code>cameraPosition</code>, the wave field would be evaluated in
-    camera-relative coordinates and ripples would visibly scroll as the player moves.
-    The <code>isWater</code> flag is essential because Iris routes all translucent geometry
-    — including stained glass blocks, which share this shader stage — through
-    <code>gbuffers_water</code>. Without the gate, all stained glass blocks would
-    appear to ripple like water.
-  </p>
-
   <p>
     The <code>final.vsh/fsh</code> stage simply blits <code>gcolor</code>
     (the output of composite) to screen — no additional processing needed:
@@ -705,6 +631,7 @@ void main() {
           resolved this completely.
         </td>
       </tr>
+
       <tr>
         <td>Stained glass rippling like water</td>
         <td>
@@ -748,6 +675,7 @@ void main() {
       <h4>Screen-space techniques are a pragmatic trade-off</h4>
       <p>SSR is fast and convincing on-screen but cannot reflect off-camera geometry. Knowing and accepting that limit — rather than chasing a perfect solution — is part of real-time graphics.</p>
     </div>
+
     <div class="lesson-card">
       <h4>Height fields → normals via the gradient</h4>
       <p>The derivation <em>n = normalize(−∂h/∂x, 1, −∂h/∂z)</em> comes from the cross product of surface tangents. Working through it from first principles made the math genuinely ours.</p>
@@ -773,31 +701,30 @@ void main() {
 
   <div class="result-grid">
     <div class="result-item">
-      <!-- Add your screenshot: <img src="images/comparison.png" alt="Before vs after" /> -->
-      <p class="result-ph">[ Insert comparison screenshot ]</p>
-      <p class="result-caption"><em>Figure 1.</em> Vanilla Minecraft (left) vs. BlockTrace (right). Note cast shadows under foliage and reflections on the iron block.</p>
+      <img src="images/shadows.png" alt="Directional sun shadows over village" />
+      <p class="result-caption"><em>Figure 1.</em> Directional sun shadows cast across a village scene. Each pixel's world position is reprojected into the sun's 1024×1024 orthographic shadow map and depth-compared with a 0.005 bias.</p>
     </div>
     <div class="result-item">
-      <!-- <img src="images/shadows.png" alt="Sun shadows" /> -->
-      <p class="result-ph">[ Insert shadows screenshot ]</p>
-      <p class="result-caption"><em>Figure 2.</em> Directional sun shadows. Each pixel's world position is reprojected into the sun's 1024×1024 orthographic shadow map and depth-compared with a 0.005 bias.</p>
+      <img src="images/ssr_blocks.png" alt="SSR on netherite, emerald, diamond, gold, ice, glass" />
+      <p class="result-caption"><em>Figure 2.</em> Screen-space reflections on (closest to furthest): netherite, emerald, diamond, gold, ice, glass. Each reflects its surroundings via a 32-step view-space ray march with Schlick Fresnel modulation.</p>
     </div>
     <div class="result-item">
-      <!-- <img src="images/ssr_blocks.png" alt="SSR on shiny blocks" /> -->
-      <p class="result-ph">[ Insert SSR blocks screenshot ]</p>
-      <p class="result-caption"><em>Figure 3.</em> SSR on glass and ice (ID 100, reflectivity 0.7) and iron, gold, diamond, emerald, netherite blocks (ID 101, reflectivity 0.5). Schlick Fresnel increases reflection strength at grazing angles.</p>
+      <img src="images/vanilla_water.png" alt="Iron block in vanilla Minecraft — no shader" />
+      <p class="result-caption"><em>Figure 3.</em> Vanilla Minecraft — iron block next to water with no shader loaded. Flat lighting, no reflections.</p>
     </div>
     <div class="result-item">
-      <!-- <img src="images/water.gif" alt="Animated water" /> -->
-      <p class="result-ph">[ Insert water GIF / clip ]</p>
-      <p class="result-caption"><em>Figure 4.</em> Animated water. Wave normals derived from a two-sine height field (wavelengths 4.0 and 2.5, evaluated in world space). Reflected scene ripples in real time.</p>
+      <img src="images/shader_water.png" alt="Iron block with BlockTrace shader — water reflections active" />
+      <p class="result-caption"><em>Figure 4.</em> Same scene with BlockTrace loaded. Water reflects the surrounding terrain and the iron block via SSR.</p>
+    </div>
+    <div class="result-item">
+      <img src="images/iron_reflect.png" alt="Iron block reflecting orange block via SSR" />
+      <p class="result-caption"><em>Figure 5.</em> Iron block (ID 101, reflectivity 0.5) reflecting an adjacent orange block — SSR sampling the screen-space color at the reflected ray's hit point.</p>
+    </div>
+    <div class="result-item">
+      <img src="images/iron_classic.png" alt="Iron block in vanilla — no reflection" />
+      <p class="result-caption"><em>Figure 6.</em> Same iron block in vanilla Minecraft with no shader — flat, no reflection. Directly comparable to Figure 5.</p>
     </div>
   </div>
-
-  <p style="font-size:13.5px; color:var(--muted); margin-top:1rem;">
-    To add real screenshots: place image files in an <code>images/</code> folder next to this HTML file,
-    uncomment the <code>&lt;img&gt;</code> tags above, and remove the placeholder <code>&lt;p&gt;</code> tags.
-  </p>
 </section>
 
 <!-- ════════════════════════════════════════
@@ -807,8 +734,7 @@ void main() {
   <div class="eyebrow">04 — Showcase Video</div>
   <h2>Showcase Video</h2>
   <p>
-    A 1–2 minute video demonstrating shadow mapping, screen-space reflections, and
-    animated water running live in-game. All three team members appear in the video.
+    A 1–2 minute video demonstrating shadow mapping, screen-space reflections, and water reflections running live in-game. All three team members appear in the video.
   </p>
   <div class="video-box">
     <!--
@@ -855,11 +781,12 @@ void main() {
       <a href="https://learnopengl.com" target="_blank">learnopengl.com</a>.
       Reference for the ray-march loop structure, on-screen bounds check, and depth comparison logic in <code>composite.fsh</code>.
     </li>
+
     <li>
       <strong>Tessendorf, J. (2001).</strong>
       <em>Simulating Ocean Water.</em> SIGGRAPH 2001 Course Notes.
       Background reading on sum-of-sines and Gerstner wave height-field models;
-      inspired our two-wave <code>heightField()</code> design in <code>gbuffers_water.fsh</code>.
+      inspired our animated water normal derivation in <code>gbuffers_water.fsh</code>.
     </li>
     <li>
       <strong>Akenine-Möller, T., Haines, E., Hoffman, N.</strong>
