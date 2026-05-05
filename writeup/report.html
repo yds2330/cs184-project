@@ -779,7 +779,7 @@ void main() {
       <p class="result-caption"><em>Figure 3.</em> Vanilla Minecraft — iron block next to water with no shader loaded. Flat lighting, no reflections.</p>
     </div>
     <div class="result-item">
-      <img src="images/shader_water.png" alt="Iron block with BlockTrace shader — water reflections active" />
+      <img src="images/vanilla_water2.png" alt="Iron block with BlockTrace shader — water reflections active" />
       <p class="result-caption"><em>Figure 4.</em> Same scene with BlockTrace loaded. Water reflects the surrounding terrain and the iron block via SSR.</p>
     </div>
     <div class="result-item">
@@ -789,6 +789,10 @@ void main() {
     <div class="result-item">
       <img src="images/iron_classic.png" alt="Iron block in vanilla — no reflection" />
       <p class="result-caption"><em>Figure 6.</em> Same iron block in vanilla Minecraft with no shader — flat, no reflection. Directly comparable to Figure 5.</p>
+    </div>
+    <div class="result-item">
+      <img src="images/water sin wave.png" alt="Water reflection" />
+      <p class="result-caption"> <em>Figure X.</em> Reflection in water showing SSR with wave distortion.</p>
     </div>
   </div>
 </section>
@@ -803,17 +807,13 @@ void main() {
     A 1–2 minute video demonstrating shadow mapping, screen-space reflections, and animated water running live in-game. All three team members appear in the video.
   </p>
   <div class="video-box">
-    <!--
-      To embed: replace YOUR_VIDEO_ID below with the actual YouTube video ID, then
-      uncomment the iframe and remove the placeholder paragraph.
-    <iframe width="100%" height="420"
-      src="https://www.youtube.com/embed/YOUR_VIDEO_ID"
-      title="BlockTrace CS184 Showcase Video" frameborder="0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen style="border-radius:2px; display:block;">
-    </iframe>
-    -->
-    <p>[ Paste YouTube / Google Drive link here after filming — or embed above ]</p>
+    <video controls width="100%" style="border-radius:2px;">
+    <source src="images/demo.mp4" type="video/mp4">
+ </video>
+
+<p class="result-caption">
+  <em>Video.</em> Demonstration of shadows, reflections, and animated water.
+</p>
   </div>
 </section>
 
