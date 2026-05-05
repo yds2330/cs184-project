@@ -875,15 +875,15 @@ void main() {
     <tbody>
       <tr>
         <td>Vedant Jhawar</td>
-        <td style="color:var(--muted); font-style:italic;">[ To be filled in ]</td>
+        <td>Set up the Iris/Optifine project scaffolding and shader pack directory structure. Implemented the shadow pass (<code>shadow.vsh</code> / <code>shadow.fsh</code>) and the composite-side shadow reprojection in <code>composite.fsh</code>, including the <code>viewPosFromDepth</code> helper, shadow UV computation, and depth bias. Configured <code>shaders.properties</code>. Produced in-game screenshots and screen recordings for the results section and showcase video.</td>
       </tr>
       <tr>
         <td>Jeremy Villanueva</td>
-        <td style="color:var(--muted); font-style:italic;">[ To be filled in ]</td>
+        <td>Implemented the augmented G-buffer (<code>colortex1</code> packing with view-space normal and reflectivity). Built the full SSR ray march in <code>composite.fsh</code> including the <code>reflect()</code> direction, 32-step view-space loop, depth comparison, Schlick Fresnel blend, and self-intersection fix. Designed and authored <code>block.properties</code> with all three material class assignments (IDs 100, 101, 102). Pushed final code changes to the repository.</td>
       </tr>
       <tr>
         <td>Yash Shah</td>
-        <td style="color:var(--muted); font-style:italic;">[ To be filled in ]</td>
+        <td>Implemented the animated water system in <code>gbuffers_water.vsh/fsh</code> including the <code>wave()</code> and <code>heightField()</code> functions, finite-difference gradient normal derivation, world-space coordinate anchoring via <code>cameraPosition</code>, and the <code>isWater</code> flag to gate wave normals away from stained glass. Authored the final project report webpage and presentation slides.</td>
       </tr>
     </tbody>
   </table>
