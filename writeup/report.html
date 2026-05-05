@@ -310,7 +310,7 @@ footer p {
   <h1><em>BlockTrace</em> — Real-Time Shadows &amp; Reflections in Minecraft</h1>
   <p class="hero-desc">
     A custom Iris/Optifine shader pack built from scratch: deferred shadow mapping,
-    screen-space reflections, and water reflections — running live in Minecraft Java Edition.
+    screen-space reflections, and animated water — running live in Minecraft Java Edition.
   </p>
   <p class="hero-meta">
     <span>Vedant Jhawar</span> &nbsp;·&nbsp;
@@ -390,8 +390,13 @@ footer p {
     </div>
     <div class="feat-card">
       <div class="feat-num">Feature 04</div>
+      <h4>Augmented G-Buffer</h4>
+      <p>Both gbuffer stages write <code>colortex1</code> packing view-space normal (rgb) and reflectivity (a) via <code>/* DRAWBUFFERS:01 */</code>.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-num">Feature 05</div>
       <h4>Animated Water</h4>
-      <p>Water reflections with SSR active. Wave normals via a sum-of-sines height field evaluated in world space.</p>
+      <p>Sum-of-sines height field with gradient-derived normals via finite differences, evaluated in world space.</p>
     </div>
   </div>
 
@@ -578,6 +583,67 @@ if (reflectivity > 0.01) {
     would be the natural extension.
   </p>
 
+  <!-- ─── WATER ─── -->
+  <h3>5 · Animated Water with Procedural Wave Normals</h3>
+
+  <p>
+    Water with a flat normal produces a static, mirror-like reflection.
+    To create natural rippling, we model the water surface as a height field
+    <em>h(x, z, t)</em> defined by two traveling sine waves, then derive a time-varying
+    surface normal from its spatial gradient. Both functions live in
+    <code>gbuffers_water.fsh</code>:
+  </p>
+  <pre>// gbuffers_water.fsh — wave model
+uniform float frameTimeCounter;  // seconds since shader load, provided by Iris
+
+float wave(vec2 p, vec2 dir, float wavelength, float speed, float amp, float t) {
+    float k = 6.2831853 / wavelength;        // k = 2π / λ
+    return amp * sin(dot(p, dir) * k + speed * t);
+}
+
+float heightField(vec2 p, float t) {
+    return wave(p, normalize(vec2( 1.0,  0.6)), 4.0, 1.5, 0.04,  t)  // wave 1
+         + wave(p, normalize(vec2(-0.7,  1.0)), 2.5, 2.1, 0.025, t); // wave 2
+}</pre>
+
+  <p>
+    The surface normal is derived from the gradient of <em>h</em> using forward finite
+    differences with <em>ε = 0.05</em>. The unit normal of the surface <em>y = h(x,z)</em>
+    is <em>n = normalize(−∂h/∂x, 1, −∂h/∂z)</em> — derived from the cross product of the
+    two natural surface tangents:
+  </p>
+  <pre>// gbuffers_water.fsh — normal from height field (water fragments only)
+if (isWater > 0.5) {
+    vec2  p   = worldPos.xz;       // true world XZ — not camera-relative
+    float t   = frameTimeCounter;
+    float eps = 0.05;
+
+    float hC = heightField(p,                  t);
+    float hX = heightField(p + vec2(eps, 0.0), t);
+    float hZ = heightField(p + vec2(0.0, eps), t);
+
+    vec3 worldNormal = normalize(vec3(-(hX - hC) / eps, 1.0, -(hZ - hC) / eps));
+
+    // Rotate world-space normal into view space for colortex1
+    outNormalView = normalize((gbufferModelView * vec4(worldNormal, 0.0)).xyz);
+}</pre>
+
+  <p>
+    The <code>worldPos</code> variable is reconstructed in <code>gbuffers_water.vsh</code> by
+    undoing the view transform and adding the camera world offset:
+  </p>
+  <pre>// gbuffers_water.vsh — world position
+vec4 viewVertex = gl_ModelViewMatrix * gl_Vertex;
+worldPos = (gbufferModelViewInverse * viewVertex).xyz + cameraPosition;
+isWater  = (int(mc_Entity.x + 0.5) == 102) ? 1.0 : 0.0;</pre>
+
+  <p>
+    Without adding <code>cameraPosition</code>, the wave field evaluates in camera-relative
+    coordinates and ripples scroll as the player moves. The <code>isWater</code> flag is
+    essential because Iris routes all translucent geometry — including stained glass — through
+    <code>gbuffers_water</code>. Without the gate, stained glass blocks ripple like water.
+  </p>
+
   <p>
     The <code>final.vsh/fsh</code> stage simply blits <code>gcolor</code>
     (the output of composite) to screen — no additional processing needed:
@@ -734,7 +800,7 @@ void main() {
   <div class="eyebrow">04 — Showcase Video</div>
   <h2>Showcase Video</h2>
   <p>
-    A 1–2 minute video demonstrating shadow mapping, screen-space reflections, and water reflections running live in-game. All three team members appear in the video.
+    A 1–2 minute video demonstrating shadow mapping, screen-space reflections, and animated water running live in-game. All three team members appear in the video.
   </p>
   <div class="video-box">
     <!--
